@@ -4,6 +4,7 @@
   "main": "dist/orchestrator.js",
   "scripts": {
     "build": "tsc",
+    "postinstall": "npm run build",
     "start": "node dist/orchestrator.js"
   },
   "dependencies": {
