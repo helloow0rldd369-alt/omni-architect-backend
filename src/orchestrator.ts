@@ -59,55 +59,60 @@ wss.on('connection', (ws: WebSocket, req) => {
     ws.on('message', async (messageData: string) => {
       const payload = JSON.parse(messageData);
       if (payload.action === 'send_message') {
-        const userPrompt = payload.text;
-        const threadId = payload.threadId || 'default-stream';
+        try {
+          const userPrompt = payload.text;
+          const threadId = payload.threadId || 'default-stream';
 
-        // 1. Gather Historical Context (RAG & Thread Sync)
-        const history: ThreadTurn[] = await retrieveThreadHistory(session.uid, threadId);
-        
-        // 2. Select the frontier intelligence container based on subscriber level
-        const selectedModel = session.tier >= 2 ? 'gemini-3.1-pro-preview' : 'gemini-3.5-flash';
+          // 1. Gather Historical Context (RAG & Thread Sync)
+          const history: ThreadTurn[] = await retrieveThreadHistory(session.uid, threadId);
+          
+          // 2. Select the frontier intelligence container based on subscriber level
+          const selectedModel = session.tier >= 2 ? 'gemini-1.5-pro-latest' : 'gemini-1.5-flash-latest';
 
-        const model = genAI.getGenerativeModel({
-          model: selectedModel,
-          generationConfig: {
-            temperature: 0.85,
-            topP: 0.95,
-          },
-          // Inject your KERNEL_FIRMWARE as the server-side system instruction
-          systemInstruction: KERNEL_FIRMWARE
-        });
+          const model = genAI.getGenerativeModel({
+            model: selectedModel,
+            generationConfig: {
+              temperature: 0.85,
+              topP: 0.95,
+            },
+            // Inject your KERNEL_FIRMWARE as the server-side system instruction
+            systemInstruction: KERNEL_FIRMWARE
+          });
 
-        // 3. Construct chat payload
-        const contents = history.map(turn => ({
-          role: turn.role,
-          parts: [{ text: turn.content }]
-        }));
-        contents.push({ role: 'user', parts: [{ text: userPrompt }] });
+          // 3. Construct chat payload
+          const contents = history.map(turn => ({
+            role: turn.role,
+            parts: [{ text: turn.content }]
+          }));
+          contents.push({ role: 'user', parts: [{ text: userPrompt }] });
 
-        // Save current turn to storage array asynchronously
-        await saveTurnToThread(session.uid, threadId, {
-          role: 'user',
-          content: userPrompt,
-          timestamp: Date.now()
-        });
+          // Save current turn to storage array asynchronously
+          await saveTurnToThread(session.uid, threadId, {
+            role: 'user',
+            content: userPrompt,
+            timestamp: Date.now()
+          });
 
-        // 4. Stream response back to client in real-time chunks
-        const responseStream = await model.generateContentStream({ contents });
-        let fullResponseText = "";
+          // 4. Stream response back to client in real-time chunks
+          const responseStream = await model.generateContentStream({ contents });
+          let fullResponseText = "";
 
-        for await (const chunk of responseStream.stream) {
-          const chunkText = chunk.candidates?.[0]?.content?.parts?.[0]?.text || "";
-          fullResponseText += chunkText;
-          ws.send(JSON.stringify({ type: 'chunk', content: chunkText }));
+          for await (const chunk of responseStream.stream) {
+            const chunkText = chunk.candidates?.[0]?.content?.parts?.[0]?.text || "";
+            fullResponseText += chunkText;
+            ws.send(JSON.stringify({ type: 'chunk', content: chunkText }));
+          }
+
+          // Commit generation outputs back to datastore
+          await saveTurnToThread(session.uid, threadId, {
+            role: 'model',
+            content: fullResponseText,
+            timestamp: Date.now()
+          });
+        } catch (err: any) {
+          console.error("AI Generation Error:", err);
+          ws.send(JSON.stringify({ type: 'error', message: 'Engine anomaly detected.' }));
         }
-
-        // Commit generation outputs back to datastore
-        await saveTurnToThread(session.uid, threadId, {
-          role: 'model',
-          content: fullResponseText,
-          timestamp: Date.now()
-        });
       }
     });
 
