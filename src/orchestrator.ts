@@ -58,8 +58,8 @@ wss.on('connection', (ws: WebSocket, req) => {
 
     ws.on('message', async (messageData: string) => {
       const payload = JSON.parse(messageData);
-      if (payload.action === 'send') {
-        const userPrompt = payload.message;
+      if (payload.action === 'send_message') {
+        const userPrompt = payload.text;
         const threadId = payload.threadId || 'default-stream';
 
         // 1. Gather Historical Context (RAG & Thread Sync)
