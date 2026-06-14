@@ -80,7 +80,8 @@ wss.on('connection', (ws: WebSocket, req) => {
           const history: ThreadTurn[] = await retrieveThreadHistory(session.uid, threadId);
           
           // 2. Select the frontier intelligence container based on subscriber level
-          const selectedModel = session.tier >= 2 ? 'gemini-3.1-pro-preview' : 'gemini-3.5-flash';
+          // Note: gemini-3.1-pro-preview has 0 free quota on this API key. Defaulting all tiers to 3.5-flash.
+          const selectedModel = 'gemini-3.5-flash';
 
           const model = genAI.getGenerativeModel({
             model: selectedModel,
