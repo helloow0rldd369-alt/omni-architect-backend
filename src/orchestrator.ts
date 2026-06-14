@@ -61,8 +61,16 @@ wss.on('connection', (ws: WebSocket, req) => {
       session = validateSystemJwt(token);
     }
 
-    ws.on('message', async (messageData: string) => {
-      const payload = JSON.parse(messageData);
+    ws.on('message', async (messageData: any) => {
+      let payload: any;
+      try {
+        payload = JSON.parse(messageData.toString());
+      } catch (parseErr) {
+        console.error("Connection payload parse error:", parseErr);
+        ws.send(JSON.stringify({ type: 'chunk', content: '\n[Backend Error: Connection payload parse error]' }));
+        return;
+      }
+      
       if (payload.action === 'send_message') {
         try {
           const userPrompt = payload.text;
